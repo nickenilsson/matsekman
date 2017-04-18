@@ -33,16 +33,15 @@ def handle_command(command, channel):
         returns back what it needs for clarification.
     """
 
-
-
     user_id = command['user']
 
     if user_id == BOT_ID:
         return
+    beertabs[user_id] = {'balance': 0} if user_id not in beertabs else beertabs[user_id]
+    if not beertabs[user_id].get('name'):
+        username = slack_client.api_call("users.info", user=user_id).get('user', {}).get('name')
+        beertabs[user_id]['name'] = username
 
-    username = slack_client.api_call("users.info", user=user_id).get('user', {}).get('name')
-    beertabs[user_id] = {'name': username, 'balance': 0} if user_id not in beertabs else beertabs[user_id]
-    sign = '-' if beertabs[user_id] < 0 else '+'
 
     if command['text'].lower().strip() == 'cleared':
         beertabs[user_id]['balance'] = 0
@@ -54,6 +53,7 @@ def handle_command(command, channel):
         match = re.search(r"^\+(\d+)$", command['text'])
         amount = int(match.group(1))
         beertabs[user_id]['balance'] = beertabs[user_id]['balance'] + amount
+        sign = '+' if amount > 0 else ''
         response = "{}, {}! Your beer balance is {}{} :beers:".format(random.choice(cheers), username, sign, beertabs[user_id]['balance'])
         slack_client.api_call("chat.postMessage", channel=channel, text=response, as_user=True)
         return
@@ -62,6 +62,7 @@ def handle_command(command, channel):
         match = re.search(r"^\-(\d+)$", command['text'])
         amount = int(match.group(1))
         beertabs[user_id]['balance'] = beertabs[user_id]['balance'] - amount
+        sign = '+' if amount > 0 else ''
         response = "Thank you, {}! Your beer balance is {}{} :beers:".format(username, sign, beertabs[user_id]['balance'])
         slack_client.api_call("chat.postMessage", channel=channel, text=response, as_user=True)
         return

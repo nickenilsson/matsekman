@@ -22,9 +22,22 @@ BOT_ID = os.environ.get("BOT_ID")
 # instantiate Slack & Twilio clients
 slack_client = SlackClient(os.environ.get('SLACK_BOT_TOKEN'))
 
+beertab_file_path = "./beertab.json"
+
 last_weekly_update = None
 
-beertabs = {}
+try:
+    with open(beertab_file_path, 'r') as f:
+        beertabs = json.loads(f.read())
+except (ValueError, IOError):
+    beertabs = {}
+
+
+def storeBeerTab():
+    with open(beertab_file_path, 'w') as f:
+        print json.dumps(beertabs)
+        f.write(json.dumps(beertabs))
+
 
 def handle_command(command, channel):
     """
@@ -35,7 +48,6 @@ def handle_command(command, channel):
 
     user_id = command['user']
     if user_id == BOT_ID:
-        print "Bot", user_id
         return
 
     beertabs[user_id] = {'balance': 0} if user_id not in beertabs else beertabs[user_id]
@@ -49,24 +61,28 @@ def handle_command(command, channel):
         beertabs[user_id]['balance'] = 0
         response = "Cleared! {}'s beer balance is 0 :beers:".format(username)
         slack_client.api_call("chat.postMessage", channel=channel, text=response, as_user=True)
+        storeBeerTab()
         return
-    elif command['text'] == 'help':
-        response = "Hello beer lovers! This is how I work:\n" \
-                   "Take/drink x amount of beers, say '+x'\n" \
-                   "Refill fridge with x amount of beers, say '-x'\n" \
-                   "To check your balance, just say: 'my balance'\n" \
-                   "To see everyone's balance, you say 'all balances'\n" \
-                   "To zero out your balance, please say 'cleared'\n" \
-                   "If you need to adjust your balance to x amount you can do that by saying 'set x'\n"
+    elif command['text'].lower().strip() == 'help':
+        response = "Hello beer lovers! This is how you will speak to me:\n" \
+                   "Take/drink x amount of beers, say *+x*\n" \
+                   "Refill fridge with x amount of beers, say *-x*\n" \
+                   "To check your balance, just say: *my balance*\n" \
+                   "To see everyone's balance, you say *all balances*\n" \
+                   "To zero out your balance, please say *cleared*\n" \
+                   "If you need to adjust your balance to x amount you can do that by saying *set x*\n" \
+                   "I am case insensitive. "
         slack_client.api_call("chat.postMessage", channel=channel, text=response, as_user=True)
         return
+
     elif re.search(r"^\+(\d+)$", command['text']):
         match = re.search(r"^\+(\d+)$", command['text'])
         amount = int(match.group(1))
         beertabs[user_id]['balance'] = beertabs[user_id]['balance'] + amount
         sign = '+' if beertabs[user_id]['balance'] > 0 else ''
-        response = "{}, {}! Your beer balance is {}{} :beers:".format(random.choice(cheers), username, sign, beertabs[user_id]['balance'])
+        response = "{}, {}! Your beer balance is *{}{}* :beers:".format(random.choice(cheers), username, sign, beertabs[user_id]['balance'])
         slack_client.api_call("chat.postMessage", channel=channel, text=response, as_user=True)
+        storeBeerTab()
         return
 
     elif re.search(r"^\-(\d+)$", command['text']):
@@ -74,13 +90,14 @@ def handle_command(command, channel):
         amount = int(match.group(1))
         beertabs[user_id]['balance'] = beertabs[user_id]['balance'] - amount
         sign = '+' if beertabs[user_id]['balance'] > 0 else ''
-        response = "Thank you, {}! Your beer balance is {}{} :beers:".format(username, sign, beertabs[user_id]['balance'])
+        response = "Thank you, {}! Your beer balance is *{}{}* :beers:".format(username, sign, beertabs[user_id]['balance'])
         slack_client.api_call("chat.postMessage", channel=channel, text=response, as_user=True)
+        storeBeerTab()
         return
 
     elif command['text'].lower() == 'my balance':
         sign = '+' if beertabs[user_id]['balance'] > 0 else ''
-        response = "{}'s current beer balance is {}{} :beers:".format(username, beertabs[user_id]['balance'])
+        response = "{}'s current beer balance is *{}{}* :beers:".format(username, sign, beertabs[user_id]['balance'])
         slack_client.api_call("chat.postMessage", channel=channel, text=response, as_user=True)
         return
 
@@ -90,18 +107,21 @@ def handle_command(command, channel):
             if user_id == BOT_ID:
                 continue
             sign = '-' if item['balance'] < 0 else '+'
-            response += "{}: {}{} :beers:\n".format(item['name'], sign, item['balance'])
+            response += "*{}*: *{}{}* :beers:\n".format(item['name'], sign, item['balance'])
         slack_client.api_call("chat.postMessage", channel=channel, text=response, as_user=True)
         return
 
-    elif re.match(r"(?i)^set (-|\+)(\d+)$", command['text']):
-        match = re.match(r"(?i)set (-|\+)(\d+)", command['text'])
+    elif re.match(r"(?i)^set (\+|-)?(\d+)$", command['text']):
+        match = re.match(r"(?i)^set (\+|-)?(\d+)$", command['text'])
         amount = int(match.group(2))
         amount = -amount if match.group(1) == '-' else amount
+        amount = 0 if match.group(2) == 0 else amount
+
         beertabs[user_id]['balance'] = amount
         sign = '+' if beertabs[user_id]['balance'] > 0 else ''
-        response = "{}'s beer balance adjusted to {}{} :beers:".format(username, sign, amount)
+        response = "*{}*'s beer balance adjusted to *{}{}* :beers:".format(username, sign, amount)
         slack_client.api_call("chat.postMessage", channel=channel, text=response, as_user=True)
+        storeBeerTab()
         return
 
 def parse_slack_output(slack_rtm_output):

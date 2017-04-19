@@ -3,7 +3,7 @@ import os
 from slackclient import SlackClient
 
 
-BOT_NAME = 'matsekman'
+BOT_NAME = 'bjorn-nilsson'
 
 slack_client = SlackClient(os.environ.get('SLACK_BOT_TOKEN'))
 print "token", os.environ.get('SLACK_BOT_TOKEN')

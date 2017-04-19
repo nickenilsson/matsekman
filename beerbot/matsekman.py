@@ -4,7 +4,6 @@ import time
 from slackclient import SlackClient
 import re
 import random
-import datetime
 import json
 
 
@@ -15,6 +14,7 @@ cheers = [
     'į sveikatą', 'На здравје', 'Эрүүл мэндийн төлөө', 'Skål', 'Na zdrowie', 'Saúde', 'Noroc', 'На здоровье',
     'živeli', 'Na zdravie', 'Salud', 'Skål', 'Chok dee', 'Şerefe', 'будьмо', 'Một hai ba, yo', 'Iechyd da', 'Sei gesund'
 ]
+
 
 # starterbot's ID as an environment variable
 BOT_ID = os.environ.get("BOT_ID")
@@ -40,11 +40,6 @@ def storeBeerTab():
 
 
 def handle_command(command, channel):
-    """
-        Receives commands directed at the bot and determines if they
-        are valid commands. If so, then acts on the commands. If not,
-        returns back what it needs for clarification.
-    """
 
     user_id = command['user']
     if user_id == BOT_ID:
@@ -125,18 +120,12 @@ def handle_command(command, channel):
         return
 
 def parse_slack_output(slack_rtm_output):
-    """
-        The Slack Real Time Messaging API is an events firehose.
-        this parsing function returns None unless a message is
-        directed at the Bot, based on its ID.
-    """
+
     output_list = slack_rtm_output
     print slack_rtm_output
     if output_list and len(output_list) > 0:
         for output in output_list:
             if output and 'text' in output and 'user' in output:
-                # return text after the @ mention, whitespace removed
-
                 return output, output['channel']
 
     return None, None
@@ -148,9 +137,12 @@ if __name__ == "__main__":
     if slack_client.rtm_connect():
         print("StarterBot connected and running!")
         while True:
-            command, channel = parse_slack_output(slack_client.rtm_read())
-            if command and channel:
-                handle_command(command, channel)
+            try:
+                command, channel = parse_slack_output(slack_client.rtm_read())
+                if command and channel:
+                    handle_command(command, channel)
+            except Exception, e:
+                print e
             time.sleep(READ_WEBSOCKET_DELAY)
     else:
         print("Connection failed. Invalid Slack token or bot ID?")

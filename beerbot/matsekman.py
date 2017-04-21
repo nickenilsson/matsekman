@@ -24,7 +24,7 @@ slack_client = SlackClient(os.environ.get('SLACK_BOT_TOKEN'))
 
 beertab_file_path = "./beertab.json"
 
-last_weekly_update = None
+FALLBACK_USERNAME = 'Jean Doe'
 
 try:
     with open(beertab_file_path, 'r') as f:
@@ -35,8 +35,70 @@ except (ValueError, IOError):
 
 def storeBeerTab():
     with open(beertab_file_path, 'w') as f:
-        print json.dumps(beertabs)
         f.write(json.dumps(beertabs))
+
+
+def cleared(user_id, channel):
+    username = beertabs[user_id].get('name', FALLBACK_USERNAME)
+    beertabs[user_id]['balance'] = 0
+    response = "Cleared! {}'s beer balance is 0 :beers:".format(username)
+    slack_client.api_call("chat.postMessage", channel=channel, text=response, as_user=True)
+    storeBeerTab()
+
+
+def add_beer(user_id, amount, channel):
+    username = beertabs[user_id].get('name', FALLBACK_USERNAME)
+    beertabs[user_id]['balance'] = beertabs[user_id]['balance'] + amount
+    sign = '+' if beertabs[user_id]['balance'] > 0 else ''
+    response = "Thank you, {}! Your beer balance is *{}{}* :beers:".format(username, sign, beertabs[user_id]['balance'])
+    slack_client.api_call("chat.postMessage", channel=channel, text=response, as_user=True)
+    storeBeerTab()
+
+
+def deduct_beer(user_id, amount, channel):
+    username = beertabs[user_id].get('name', FALLBACK_USERNAME)
+    beertabs[user_id]['balance'] = beertabs[user_id]['balance'] - amount
+    sign = '+' if beertabs[user_id]['balance'] > 0 else ''
+    response = "{}, {}! Your beer balance is *{}{}* :beers:".format(random.choice(cheers), username, sign,
+                                                                    beertabs[user_id]['balance'])
+    slack_client.api_call("chat.postMessage", channel=channel, text=response, as_user=True)
+    storeBeerTab()
+
+def set_balance(user_id, amount, channel):
+    username = beertabs[user_id].get('name', FALLBACK_USERNAME)
+    beertabs[user_id]['balance'] = amount
+    sign = '+' if beertabs[user_id]['balance'] > 0 else ''
+    response = "*{}*'s beer balance adjusted to *{}{}* :beers:".format(username, sign, amount)
+    slack_client.api_call("chat.postMessage", channel=channel, text=response, as_user=True)
+    storeBeerTab()
+
+
+def show_help(channel):
+    response = "Hello beer lovers! This is how you will speak to me:\n" \
+               "Take/drink x amount of beers, say *-x*\n" \
+               "Refill fridge with x amount of beers, say *+x*\n" \
+               "To check your balance, just say: *my balance*\n" \
+               "To see everyone's balance, you say *all balances*\n" \
+               "To zero out your balance, please say *cleared*\n" \
+               "If you need to adjust your balance to x amount you can do that by saying *set x*\n" \
+               "I am case insensitive. "
+    slack_client.api_call("chat.postMessage", channel=channel, text=response, as_user=True)
+
+def show_my_balance(user_id, channel):
+    username = beertabs[user_id].get('name', FALLBACK_USERNAME)
+    sign = '+' if beertabs[user_id]['balance'] > 0 else ''
+    response = "{}'s current beer balance is *{}{}* :beers:".format(username, sign, beertabs[user_id]['balance'])
+    slack_client.api_call("chat.postMessage", channel=channel, text=response, as_user=True)
+
+def show_all_balances(channel):
+    response = ""
+    for user_id, item in beertabs.items():
+        if user_id == BOT_ID:
+            continue
+        sign = '+' if item['balance'] < 0 else ''
+        response += "*{}*: *{}{}* :beers:\n".format(item.get('name', FALLBACK_USERNAME), sign, item['balance'])
+    slack_client.api_call("chat.postMessage", channel=channel, text=response, as_user=True)
+
 
 
 def handle_command(command, channel):
@@ -52,58 +114,33 @@ def handle_command(command, channel):
     else:
         username = beertabs[user_id]['name']
 
-    if command['text'].lower().strip() == 'cleared':
-        beertabs[user_id]['balance'] = 0
-        response = "Cleared! {}'s beer balance is 0 :beers:".format(username)
-        slack_client.api_call("chat.postMessage", channel=channel, text=response, as_user=True)
-        storeBeerTab()
+    if re.search(r"(?i)^puppet:(.+)", command['text']) and user_id == 'U4YUU5YSG':
+        response = re.search(r"(?i)^puppet:(.+)", command['text']).group(1)
+        slack_client.api_call("chat.postMessage", channel='C4YRPHYV9', text=response, as_user=True)
+        return
+    elif command['text'].lower().strip() == 'cleared':
+        cleared(user_id=user_id, channel=channel)
         return
     elif command['text'].lower().strip() == 'help':
-        response = "Hello beer lovers! This is how you will speak to me:\n" \
-                   "Take/drink x amount of beers, say *+x*\n" \
-                   "Refill fridge with x amount of beers, say *-x*\n" \
-                   "To check your balance, just say: *my balance*\n" \
-                   "To see everyone's balance, you say *all balances*\n" \
-                   "To zero out your balance, please say *cleared*\n" \
-                   "If you need to adjust your balance to x amount you can do that by saying *set x*\n" \
-                   "I am case insensitive. "
-        slack_client.api_call("chat.postMessage", channel=channel, text=response, as_user=True)
+        show_help(channel=channel)
+        return
+
+    elif re.search(r"^-(\d+)$", command['text']):
+        match = re.search(r"^-(\d+)$", command['text'])
+        deduct_beer(user_id=user_id, amount=int(match.group(1)), channel=channel)
         return
 
     elif re.search(r"^\+(\d+)$", command['text']):
         match = re.search(r"^\+(\d+)$", command['text'])
-        amount = int(match.group(1))
-        beertabs[user_id]['balance'] = beertabs[user_id]['balance'] + amount
-        sign = '+' if beertabs[user_id]['balance'] > 0 else ''
-        response = "{}, {}! Your beer balance is *{}{}* :beers:".format(random.choice(cheers), username, sign, beertabs[user_id]['balance'])
-        slack_client.api_call("chat.postMessage", channel=channel, text=response, as_user=True)
-        storeBeerTab()
-        return
-
-    elif re.search(r"^\-(\d+)$", command['text']):
-        match = re.search(r"^\-(\d+)$", command['text'])
-        amount = int(match.group(1))
-        beertabs[user_id]['balance'] = beertabs[user_id]['balance'] - amount
-        sign = '+' if beertabs[user_id]['balance'] > 0 else ''
-        response = "Thank you, {}! Your beer balance is *{}{}* :beers:".format(username, sign, beertabs[user_id]['balance'])
-        slack_client.api_call("chat.postMessage", channel=channel, text=response, as_user=True)
-        storeBeerTab()
+        add_beer(user_id=user_id, amount=int(match.group(1)), channel=channel)
         return
 
     elif command['text'].lower() == 'my balance':
-        sign = '+' if beertabs[user_id]['balance'] > 0 else ''
-        response = "{}'s current beer balance is *{}{}* :beers:".format(username, sign, beertabs[user_id]['balance'])
-        slack_client.api_call("chat.postMessage", channel=channel, text=response, as_user=True)
+        show_my_balance(user_id=user_id, channel=channel)
         return
 
     elif command['text'].lower() == 'all balances':
-        response = ""
-        for user_id, item in beertabs.items():
-            if user_id == BOT_ID:
-                continue
-            sign = '-' if item['balance'] < 0 else '+'
-            response += "*{}*: *{}{}* :beers:\n".format(item['name'], sign, item['balance'])
-        slack_client.api_call("chat.postMessage", channel=channel, text=response, as_user=True)
+        show_all_balances(channel=channel)
         return
 
     elif re.match(r"(?i)^set (\+|-)?(\d+)$", command['text']):
@@ -111,12 +148,7 @@ def handle_command(command, channel):
         amount = int(match.group(2))
         amount = -amount if match.group(1) == '-' else amount
         amount = 0 if match.group(2) == 0 else amount
-
-        beertabs[user_id]['balance'] = amount
-        sign = '+' if beertabs[user_id]['balance'] > 0 else ''
-        response = "*{}*'s beer balance adjusted to *{}{}* :beers:".format(username, sign, amount)
-        slack_client.api_call("chat.postMessage", channel=channel, text=response, as_user=True)
-        storeBeerTab()
+        set_balance(user_id=user_id, amount=amount, channel=channel)
         return
 
 def parse_slack_output(slack_rtm_output):

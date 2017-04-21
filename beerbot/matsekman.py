@@ -111,16 +111,17 @@ def handle_command(command, channel):
     if not beertabs[user_id].get('name'):
         username = slack_client.api_call("users.info", user=user_id).get('user', {}).get('name')
         beertabs[user_id]['name'] = username
-    else:
-        username = beertabs[user_id]['name']
+
 
     if re.search(r"(?i)^puppet:(.+)", command['text']) and user_id == 'U4YUU5YSG':
         response = re.search(r"(?i)^puppet:(.+)", command['text']).group(1)
         slack_client.api_call("chat.postMessage", channel='C4YRPHYV9', text=response, as_user=True)
         return
+
     elif command['text'].lower().strip() == 'cleared':
         cleared(user_id=user_id, channel=channel)
         return
+
     elif command['text'].lower().strip() == 'help':
         show_help(channel=channel)
         return

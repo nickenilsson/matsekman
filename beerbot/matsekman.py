@@ -5,7 +5,9 @@ from slackclient import SlackClient
 import re
 import random
 import json
-
+import traceback
+import time
+import socket
 
 cheers = [
     'Կէնաձդ', 'Gesondheid', 'Gëzuar', 'فى صحتك:', 'Nuş olsun', 'Živjeli', 'Наздраве', '	Aung myin par say', 'Salut'
@@ -48,7 +50,7 @@ def cleared(user_id, channel):
 
 def add_beer(user_id, amount, channel):
     username = beertabs[user_id].get('name', FALLBACK_USERNAME)
-    beertabs[user_id]['balance'] = beertabs[user_id]['balance'] + amount
+    beertabs[user_id]['balance'] = beertabs[user_id]['balance'] - amount
     sign = '+' if beertabs[user_id]['balance'] > 0 else ''
     response = "Thank you, {}! Your beer balance is *{}{}* :beers:".format(username, sign, beertabs[user_id]['balance'])
     slack_client.api_call("chat.postMessage", channel=channel, text=response, as_user=True)
@@ -56,8 +58,9 @@ def add_beer(user_id, amount, channel):
 
 
 def deduct_beer(user_id, amount, channel):
+
     username = beertabs[user_id].get('name', FALLBACK_USERNAME)
-    beertabs[user_id]['balance'] = beertabs[user_id]['balance'] - amount
+    beertabs[user_id]['balance'] = beertabs[user_id]['balance'] + amount
     sign = '+' if beertabs[user_id]['balance'] > 0 else ''
     response = "{}, {}! Your beer balance is *{}{}* :beers:".format(random.choice(cheers), username, sign,
                                                                     beertabs[user_id]['balance'])
@@ -95,7 +98,7 @@ def show_all_balances(channel):
     for user_id, item in beertabs.items():
         if user_id == BOT_ID:
             continue
-        sign = '+' if item['balance'] < 0 else ''
+        sign = '+' if item['balance'] > 0 else ''
         response += "*{}*: *{}{}* :beers:\n".format(item.get('name', FALLBACK_USERNAME), sign, item['balance'])
     slack_client.api_call("chat.postMessage", channel=channel, text=response, as_user=True)
 
@@ -126,13 +129,13 @@ def handle_command(command, channel):
         show_help(channel=channel)
         return
 
-    elif re.search(r"^-(\d+)$", command['text']):
-        match = re.search(r"^-(\d+)$", command['text'])
+    elif re.search(r"^\+(\d+)$", command['text']):
+        match = re.search(r"^\+(\d+)$", command['text'])
         deduct_beer(user_id=user_id, amount=int(match.group(1)), channel=channel)
         return
 
-    elif re.search(r"^\+(\d+)$", command['text']):
-        match = re.search(r"^\+(\d+)$", command['text'])
+    elif re.search(r"^-(\d+)$", command['text']):
+        match = re.search(r"^-(\d+)$", command['text'])
         add_beer(user_id=user_id, amount=int(match.group(1)), channel=channel)
         return
 
@@ -155,7 +158,7 @@ def handle_command(command, channel):
 def parse_slack_output(slack_rtm_output):
 
     output_list = slack_rtm_output
-    print slack_rtm_output
+    #print slack_rtm_output
     if output_list and len(output_list) > 0:
         for output in output_list:
             if output and 'text' in output and 'user' in output:
@@ -174,8 +177,16 @@ if __name__ == "__main__":
                 command, channel = parse_slack_output(slack_client.rtm_read())
                 if command and channel:
                     handle_command(command, channel)
-            except Exception, e:
-                print e
+            except socket.error, e:
+                print e.message
+                time.sleep(5)
+                slack_client.rtm_connect()
+                continue
+            except:
+                print traceback.print_exc()
+                print "Something else went wrong"
+                continue
+
             time.sleep(READ_WEBSOCKET_DELAY)
     else:
         print("Connection failed. Invalid Slack token or bot ID?")

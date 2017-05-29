@@ -8,6 +8,7 @@ import json
 import traceback
 import time
 import socket
+from websocket import WebSocketConnectionClosedException
 
 cheers = [
     'Կէնաձդ', 'Gesondheid', 'Gëzuar', 'فى صحتك:', 'Nuş olsun', 'Živjeli', 'Наздраве', '	Aung myin par say', 'Salut'
@@ -177,7 +178,7 @@ if __name__ == "__main__":
                 command, channel = parse_slack_output(slack_client.rtm_read())
                 if command and channel:
                     handle_command(command, channel)
-            except (socket.error, socket.WebSocketConnectionClosedException), e:
+            except (socket.error, WebSocketConnectionClosedException), e:
                 print e.message
                 time.sleep(5)
                 slack_client.rtm_connect()

@@ -23,8 +23,8 @@ cheers = [
 BOT_ID = os.environ.get("BOT_ID")
 
 # instantiate Slack & Twilio clients
-#slack_client = SlackClient(os.environ.get('SLACK_BOT_TOKEN'))
-slack_client = SlackClient("xoxb-169125561744-3g4L5lbhrBSLSfD5P5z0iRO4")
+slack_client = SlackClient(os.environ.get('SLACK_BOT_TOKEN'))
+#slack_client = SlackClient("xoxb-169125561744-3g4L5lbhrBSLSfD5P5z0iRO4")
 
 
 FALLBACK_USERNAME = 'Jean Doe'
@@ -189,7 +189,7 @@ def find_channel_id(name):
             break
 
 
-def get_balance_from_channel(channel_id):
+def initialize_balance_from_channel(channel_id):
     last_message_id = None
     all_messages = []
     while True:
@@ -209,9 +209,26 @@ def get_balance_from_channel(channel_id):
     for i in range(len(all_messages)-1, 0, -1):
         handle_command(all_messages[i], channel_id)
 
+
+def channel_members(channel_id):
+    response = slack_client.api_call(
+        method="channels.info",
+        channel=channel_id
+    )
+    print response
+    return response.get("channel",{}).get("members", [])
+
+
 def initilize_beer_balance():
     beer_channel_id = find_channel_id("beer_balance")
-    get_balance_from_channel(beer_channel_id)
+    initialize_balance_from_channel(beer_channel_id)
+    active_members = channel_members(beer_channel_id)
+    print active_members
+    for user_id in beertabs.keys():
+        if user_id.strip() not in active_members:
+            beertabs.pop(user_id)
+
+
 
 
 if __name__ == "__main__":
